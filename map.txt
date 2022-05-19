@@ -1,0 +1,86 @@
+package com.example.nadira.insertapi;
+
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.FragmentActivity;
+import android.os.Bundle;
+import android.util.Log;
+
+import com.example.healper.Donar;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.CameraPosition;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
+
+import java.util.ArrayList;
+
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+
+    private GoogleMap mMap;
+    private ArrayList<Donar> donarArrayList = new ArrayList<>();
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_maps);
+        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
+        mapFragment.getMapAsync(this);
+        donarArrayList = SearchActivity.donars;
+    }
+
+
+    @Override
+    public void onMapReady(GoogleMap googleMap) {
+        mMap = googleMap;
+        Log.d("MapsActivity", "---- onMapReady: " + donarArrayList.size());
+        // Add a marker in Sydney and move the camera
+        for (int i = 0; i < donarArrayList.size(); i++) {
+            LatLng place = new LatLng(donarArrayList.get(i).getLatitute(), donarArrayList.get(i).getLongitute());
+            mMap.addMarker(new MarkerOptions().snippet("0" + donarArrayList.get(i).getContact()).position(place).title(donarArrayList.get(i).getName())).setIcon(BitmapDescriptorFactory.fromResource(R.drawable.contact_male));
+//            if(i == 0)  mMap.moveCamera(CameraUpdateFactory.newLatLng(place));
+            if (i == 0) pointToPosition(place);
+
+        }
+
+        mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
+
+            @Override
+            public void onInfoWindowClick(Marker arg0) {
+                Log.d("MapsActivity", "------- onclick: " + arg0.getSnippet());
+                Intent callIntent = new Intent(Intent.ACTION_CALL);
+                callIntent.setData(Uri.parse("tel:"+arg0.getSnippet()));
+                if (ActivityCompat.checkSelfPermission(MapsActivity.this, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
+                    // TODO: Consider calling
+                    //    ActivityCompat#requestPermissions
+                    // here to request the missing permissions, and then overriding
+                    //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                    //                                          int[] grantResults)
+                    // to handle the case where the user grants the permission. See the documentation
+                    // for ActivityCompat#requestPermissions for more details.
+                    return;
+                }
+                startActivity(callIntent);
+            }
+        });
+    }
+
+    private void pointToPosition(LatLng position) {
+        //Build camera position
+        CameraPosition cameraPosition = new CameraPosition.Builder()
+                .target(position)
+                .zoom(7).build();
+        //Zoom in and animate the camera.
+        mMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition));
+    }
+
+}

@@ -1,0 +1,197 @@
+package com.example.nadira.insertapi;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.support.design.widget.TextInputLayout;
+import android.support.v7.app.AlertDialog;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Toast;
+
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class Login_pageAcvity extends AppCompatActivity {
+    public static Login_pageAcvity instance;
+    private Context mContext;
+    private Activity mActivity;
+    EditText inputemail, inputpass;
+    TextInputLayout inputLayoutemail, inputLayoutPassword;
+    Button btnReg, btnLogin;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_login_page);
+
+        mContext = this;
+        mActivity = this;
+
+        inputemail = (EditText) findViewById(R.id.inputemail);
+        inputpass = (EditText) findViewById(R.id.inputpass);
+
+        inputLayoutemail=(TextInputLayout)findViewById(R.id.inputLayoutemail);
+        inputLayoutPassword=(TextInputLayout)findViewById(R.id.inputLayoutPassword);
+
+
+        btnReg = (Button) findViewById(R.id.btnReg);
+        btnLogin = (Button) findViewById(R.id.btnLogin);
+        btnLogin.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if(isOnline()){
+                    if(validateLogin())  login();
+                }else showAlert();
+
+
+                Animation animation = new AlphaAnimation(1.0f,0.0f);
+                animation.setDuration(1500);
+                btnLogin.startAnimation(animation);
+            }
+        });
+
+        btnReg.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(Login_pageAcvity.this, RagiActivity.class);
+                startActivity(intent);
+                finish();
+
+                Animation animation = new AlphaAnimation(1.0f,0.0f);
+                animation.setDuration(1500);
+                btnReg.startAnimation(animation);
+            }
+        });
+
+    }
+
+    private void login() {
+        RequestQueue queue = Volley.newRequestQueue(Login_pageAcvity.this);
+
+        String url= "http://projectbubt.xyz/Api/login/";
+        StringRequest postRequest = new StringRequest(Request.Method.POST, url,
+                new Response.Listener<String>()
+                {
+                    @Override
+                    public void onResponse(String response) {
+                        // response
+                        if(response.contains("user_id")){
+                            SharedPreferences sharedPref = Login_pageAcvity.this.getSharedPreferences("com.blood.donation.PREFERENCE_FILE_KEY", Context.MODE_PRIVATE);
+                            SharedPreferences.Editor editor = sharedPref.edit();
+                            editor.putBoolean(getString(R.string.is_logged_in), true);
+                            editor.commit();
+
+
+                            Intent intent = new Intent(Login_pageAcvity.this, Donor_listActivity.class);
+                            Toast.makeText(getApplication(), "sucessfully login", Toast.LENGTH_SHORT).show();                                    startActivity(intent);
+                            finish();
+                        }
+                            Log.d("LoginResponse", ""+response);
+                    }
+                },
+                new Response.ErrorListener()
+                {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        // error
+//                                Log.d("Error.Response", response);
+                    }
+                }
+        ) {
+            @Override
+            protected Map<String, String> getParams()
+            {
+                Map<String, String>  params = new HashMap<String, String>();
+
+                params.put("email", inputemail.getText().toString());
+                params.put("password", inputpass.getText().toString());
+
+                return params;
+            }
+        };
+        queue.add(postRequest);
+    }
+
+    public boolean validateLogin(){
+        boolean validate = true;
+
+        if(inputemail.getText().toString().trim().equals("")){
+            inputemail.setError("Email is required!");
+            validate = false;
+        }else{
+            Pattern p = Pattern.compile("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,6}$", Pattern.CASE_INSENSITIVE);
+            Matcher m = p.matcher(inputemail.getText().toString().trim());
+            if(!m.find()) {
+                inputemail.setError("Invalid Email!");
+                validate = false;
+            }
+        }
+
+        if(inputpass.getText().toString().trim().equals("")){
+            inputpass.setError("Password is required!");
+            validate = false;
+        }
+
+        return validate;
+    }
+
+    private void showAlert() {
+        AlertDialog.Builder builder1 = new AlertDialog.Builder(mContext);
+        builder1.setTitle("Internet Alert");
+        builder1.setMessage("No Internet Available!");
+        builder1.setCancelable(true);
+
+        builder1.setPositiveButton(
+                "Ok",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        dialog.cancel();
+                    }
+                });
+
+        builder1.setNegativeButton(
+                "",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        dialog.cancel();
+                    }
+                });
+
+        AlertDialog alert11 = builder1.create();
+        alert11.show();
+    }
+
+    public boolean isOnline() {
+        ConnectivityManager conManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (conManager != null) {
+            NetworkInfo netInfo = conManager.getActiveNetworkInfo();
+            if (netInfo != null && netInfo.isConnected()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    }
+
+

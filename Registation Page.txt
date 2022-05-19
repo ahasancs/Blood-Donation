@@ -1,0 +1,501 @@
+package com.example.nadira.insertapi;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.provider.Settings;
+import android.support.design.widget.TextInputLayout;
+import android.support.v7.app.AlertDialog;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Spinner;
+import android.widget.Toast;
+
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.VolleyLog;
+import com.android.volley.toolbox.JsonArrayRequest;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
+import com.example.healper.Blood;
+import com.example.healper.District;
+import com.example.healper.Division;
+import com.example.healper.Thana;
+import com.example.healper.Type;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+public class RagiActivity extends AppCompatActivity {
+    private Context mContext;
+    private Activity mActivity;
+    private EditText Reguname, regdob, regemail, regcontact, regidnumber;
+    private String divisionId, districtId, thanaId, bloodGroupId, typeId;
+    private Button btnsave;
+
+    private Spinner divisionSpinner, districtSpinner, thanaSpinner, bloodGroupSpinner, regidtypeSpinner;
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_ragi);
+
+
+        mContext = this;
+        mActivity = this;
+
+
+        Reguname = (EditText) findViewById(R.id.Reguname);
+        regdob = (EditText) findViewById(R.id.regdob);
+        regemail = (EditText) findViewById(R.id.regemail);
+        regcontact = (EditText) findViewById(R.id.regcontact);
+        regidnumber = (EditText) findViewById(R.id.regidnumber);
+
+        divisionSpinner = (Spinner) findViewById(R.id.division_spinner);
+        districtSpinner = (Spinner) findViewById(R.id.district_spinner);
+        thanaSpinner = (Spinner) findViewById(R.id.thana_spinner);
+        bloodGroupSpinner = (Spinner) findViewById(R.id.blood_group_spinner);
+        regidtypeSpinner = (Spinner) findViewById(R.id.regidtypeSpinner);
+
+
+        btnsave = (Button) findViewById(R.id.btnsave);
+        if(!isOnline())
+            showAlert();
+
+        btnsave.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if(isOnline()){
+                    if(validateSignup()) registrationToServer();
+                }
+                else
+                    showAlert();
+
+
+
+                Animation animation = new AlphaAnimation(1.0f,0.0f);
+                animation.setDuration(1500);
+                btnsave.startAnimation(animation);
+            }
+        });
+
+        getDivisionsFromServer();
+        getBloodGroupsFromServer();
+        setTypeSpinner();
+    }
+
+    private void registrationToServer() {
+        RequestQueue queue = Volley.newRequestQueue(RagiActivity.this);
+
+        String url= "http://projectbubt.xyz/Api/donor/";
+        StringRequest postRequest = new StringRequest(Request.Method.POST, url,
+                new Response.Listener<String>()
+                {
+                    @Override
+                    public void onResponse(String response) {
+                        Log.d("Registration", ""+response);
+                        Intent intent = new Intent(RagiActivity.this, Login_pageAcvity.class);
+                        startActivity(intent);
+                        finish();
+                    }
+                },
+                new Response.ErrorListener()
+                {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        // error
+//                                Log.d("Error.Response", response);
+                    }
+                }
+        ) {
+            @Override
+            protected Map<String, String> getParams()
+            {
+                Map<String, String>  params = new HashMap<String, String>();
+                params.put("name", Reguname.getText().toString());
+                params.put("dob", regdob.getText().toString());
+                params.put("division", divisionId);
+                params.put("district", districtId);
+                params.put("thana", thanaId);
+                params.put("bloodgroup", bloodGroupId);
+                params.put("email", regemail.getText().toString());
+                params.put("contact", regcontact.getText().toString());
+                params.put("idtype", typeId);
+                params.put("idnumber", regidnumber.getText().toString());
+
+                return params;
+            }
+        };
+        queue.add(postRequest);
+    }
+
+    private void getDivisionsFromServer(){
+        RequestQueue queue = Volley.newRequestQueue(RagiActivity.this);
+        String url="http://projectbubt.xyz/Api/division/";
+
+        StringRequest postRequest = new StringRequest(Request.Method.GET, url,
+                new Response.Listener<String>()
+                {
+                    @Override
+                    public void onResponse(String response) {
+                        // response
+                        Log.d("LoginResponse", ""+response);
+                        try {
+                            JSONArray jsonArray = new JSONArray(response);
+                            ArrayList<Division> divisions = new ArrayList<>();
+                            for(int i=0; i<jsonArray.length(); i++){
+                                JSONObject json = jsonArray.getJSONObject(i);
+                                divisions.add(new Division(json.getString("div_id"), json.getString("div_name")));
+                                if(i == 0) divisionId = json.getString("div_id");
+                            }
+                            setDivisionSpinner(divisions);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                },
+                new Response.ErrorListener()
+                {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        // error
+//                                Log.d("Error.Response", response);
+                    }
+                }
+        );
+        queue.add(postRequest);
+    }
+
+    private void getBloodGroupsFromServer(){
+        RequestQueue queue = Volley.newRequestQueue(RagiActivity.this);
+        String url="http://projectbubt.xyz/Api/bloodGroup/";
+
+        StringRequest postRequest = new StringRequest(Request.Method.GET, url,
+                new Response.Listener<String>()
+                {
+                    @Override
+                    public void onResponse(String response) {
+                        // response
+                        Log.d("LoginResponse", ""+response);
+                        try {
+                            JSONArray jsonArray = new JSONArray(response);
+                            ArrayList<Blood> bloodGroups = new ArrayList<>();
+                            for(int i=0; i<jsonArray.length(); i++){
+                                JSONObject json = jsonArray.getJSONObject(i);
+                                bloodGroups.add(new Blood(json.getString("b_group_id"), json.getString("group_name")));
+                                if(i == 0) bloodGroupId = json.getString("b_group_id");
+                            }
+                            setBloodSpinner(bloodGroups);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                },
+                new Response.ErrorListener()
+                {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        // error
+//                                Log.d("Error.Response", response);
+                    }
+                }
+        );
+        queue.add(postRequest);
+    }
+
+    private void getDistrictFromServer(String divisionId){
+        String url = "http://projectbubt.xyz/Api/district/"+divisionId;
+        RequestQueue queue = Volley.newRequestQueue(RagiActivity.this);
+
+        StringRequest postRequest = new StringRequest(Request.Method.GET, url,
+                new Response.Listener<String>()
+                {
+                    @Override
+                    public void onResponse(String response) {
+                        // response
+                        Log.d("LoginResponse", ""+response);
+                        try {
+                            JSONArray jsonArray = new JSONArray(response);
+                            ArrayList<District> districts = new ArrayList<>();
+                            for(int i=0; i<jsonArray.length(); i++){
+                                JSONObject json = jsonArray.getJSONObject(i);
+                                districts.add(new District(json.getString("dis_id"), json.getString("dis_name")));
+                                if(i == 0) districtId = json.getString("dis_id");
+                            }
+                            setDistrictSpinner(districts);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                },
+                new Response.ErrorListener()
+                {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        // error
+//                                Log.d("Error.Response", response);
+                    }
+                }
+        );
+        queue.add(postRequest);
+    }
+
+    private void getThanaFromServer(String districtId){
+        String url = "http://projectbubt.xyz/Api/thana/"+districtId;
+        RequestQueue queue = Volley.newRequestQueue(RagiActivity.this);
+
+        StringRequest postRequest = new StringRequest(Request.Method.GET, url,
+                new Response.Listener<String>()
+                {
+                    @Override
+                    public void onResponse(String response) {
+                        // response
+                        Log.d("LoginResponse", ""+response);
+                        try {
+                            JSONArray jsonArray = new JSONArray(response);
+                            ArrayList<Thana> thanas = new ArrayList<>();
+                            for(int i=0; i<jsonArray.length(); i++){
+                                JSONObject json = jsonArray.getJSONObject(i);
+                                thanas.add(new Thana(json.getString("thana_id"), json.getString("thana_name")));
+                                if(i == 0) thanaId = json.getString("thana_id");
+                            }
+                            setThanaSpinner(thanas);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                },
+                new Response.ErrorListener()
+                {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        // error
+//                                Log.d("Error.Response", response);
+                    }
+                }
+        );
+        queue.add(postRequest);
+    }
+
+    private void setDivisionSpinner(ArrayList<Division> divisions){
+
+        ArrayAdapter<Division> adapter = new ArrayAdapter<Division>(RagiActivity.this, android.R.layout.simple_spinner_dropdown_item, divisions);
+        divisionSpinner.setAdapter(adapter);
+        adapter.notifyDataSetChanged();
+        divisionSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                Division division = (Division) adapterView.getSelectedItem();
+                getDistrictFromServer(division.getId());
+                divisionId = division.getId();
+//                Toast.makeText(RagiActivity.this, "Division ID: "+division.getId()+",  Division Name : "+division.getName(), Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+
+            }
+        });
+    }
+
+    private void setDistrictSpinner(ArrayList<District> districts){
+
+        ArrayAdapter<District> districtAdapter = new ArrayAdapter<District>(RagiActivity.this, android.R.layout.simple_spinner_dropdown_item, districts);
+        districtSpinner.setAdapter(districtAdapter);
+        districtSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                District district = (District) adapterView.getSelectedItem();
+                districtId = district.getId();
+                getThanaFromServer(district.getId());
+//                Toast.makeText(RagiActivity.this, "District ID: "+district.getId()+",  District Name : "+district.getName(), Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+
+            }
+        });
+    }
+
+    private void setThanaSpinner(ArrayList<Thana> thanas){
+
+        ArrayAdapter<Thana> thanaAdapter = new ArrayAdapter<Thana>(RagiActivity.this, android.R.layout.simple_spinner_dropdown_item, thanas);
+        thanaSpinner.setAdapter(thanaAdapter);
+        thanaSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                Thana thana = (Thana) adapterView.getSelectedItem();
+                thanaId = thana.getId();
+//                Toast.makeText(RagiActivity.this, "Thana ID: "+thana.getId()+",  Thana Name : "+thana.getName(), Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+
+            }
+        });
+    }
+
+    private void setBloodSpinner(ArrayList<Blood> bloods){
+        ArrayAdapter<Blood> bloodGroupAdapter = new ArrayAdapter<Blood>(RagiActivity.this, android.R.layout.simple_spinner_dropdown_item, bloods);
+        bloodGroupSpinner.setAdapter(bloodGroupAdapter);
+        bloodGroupSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                Blood group = (Blood) adapterView.getSelectedItem();
+                bloodGroupId = group.getId();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+
+            }
+        });
+    }
+
+    private void setTypeSpinner(){
+        ArrayList<Type> types = new ArrayList<>();
+        types.add(new Type("1", "NID"));
+        types.add(new Type("2", "Driving License"));
+        types.add(new Type("3", "Passport"));
+
+        typeId = "1";
+
+        ArrayAdapter<Type> bloodGroupAdapter = new ArrayAdapter<Type>(RagiActivity.this, android.R.layout.simple_spinner_dropdown_item, types);
+        regidtypeSpinner.setAdapter(bloodGroupAdapter);
+        regidtypeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                Type type = (Type) adapterView.getSelectedItem();
+                typeId = type.getId();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+
+            }
+        });
+    }
+
+    public boolean isOnline() {
+        ConnectivityManager conManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (conManager != null) {
+            NetworkInfo netInfo = conManager.getActiveNetworkInfo();
+            if (netInfo != null && netInfo.isConnected()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void showInternetAlert() {
+        runOnUiThread(new Runnable() {
+            public void run() {
+                /*dataStore.showConfirmationDialog(
+                        SignupLoginActivity.this,
+                        Const.NO_INTERNET,
+                        "Continue",
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog,
+                                                int which) {
+                                dataStore.setPopupShown(false);
+                                dialog.cancel();
+                            }
+                        },
+                        "Network Settings",
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog,
+                                                int which) {
+                                dataStore.setPopupShown(false);
+                                Intent intent = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
+                                startActivityForResult(intent, Const.REQUEST_CODE_MOBILE_DATA);
+                            }
+                        }, "Wi-Fi Settings",
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog,
+                                                int which) {
+                                dataStore.setPopupShown(false);
+                                Intent intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
+                                startActivityForResult(intent, Const.REQUEST_CODE_WIFI);
+                            }
+                        }, false);*/
+            }
+        });
+    }
+
+    private void showAlert() {
+        AlertDialog.Builder builder1 = new AlertDialog.Builder(RagiActivity.this);
+        builder1.setTitle("Internet Alert");
+        builder1.setMessage("No Internet Available!");
+        builder1.setCancelable(true);
+
+        builder1.setPositiveButton(
+                "Ok",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        dialog.cancel();
+                    }
+                });
+
+        builder1.setNegativeButton(
+                "",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        dialog.cancel();
+                    }
+                });
+
+        AlertDialog alert11 = builder1.create();
+        alert11.show();
+    }
+
+    public boolean validateSignup(){
+        boolean validate = true;
+
+        if(Reguname.getText().toString().trim().equals("")){
+            Reguname.setError("Name field is required!");
+            validate = false;
+        }
+
+        if(regemail.getText().toString().trim().equals("")){
+            regemail.setError("Email is required!");
+            validate = false;
+        }else{
+            Pattern p = Pattern.compile("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,6}$", Pattern.CASE_INSENSITIVE);
+            Matcher m = p.matcher(regemail.getText().toString().trim());
+            if(!m.find()) {
+                regemail.setError("Invalid Email!");
+                validate = false;
+            }
+        }
+
+        if(regcontact.getText().toString().trim().equals("")){
+            regcontact.setError("Contact Number is required!");
+            validate = false;
+        }
+
+        return validate;
+    }
+}

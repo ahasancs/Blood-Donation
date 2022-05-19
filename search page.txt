@@ -1,0 +1,411 @@
+
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.support.v7.app.AlertDialog;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.Spinner;
+
+import com.android.volley.DefaultRetryPolicy;
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.VolleyLog;
+import com.android.volley.toolbox.JsonArrayRequest;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
+import com.example.healper.Blood;
+import com.example.healper.District;
+import com.example.healper.Division;
+import com.example.healper.Donar;
+import com.example.healper.Thana;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class SearchActivity extends AppCompatActivity {
+    Button searchDonar;
+    private String divisionId, districtId, thanaId, bloodGroupId;
+    private Spinner divisionSpinner, districtSpinner, thanaSpinner, bloodGroupSpinner;
+    public static ArrayList<Donar> donars = new ArrayList<>();
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_search);
+
+        divisionSpinner = (Spinner) findViewById(R.id.division_spinner);
+        districtSpinner = (Spinner) findViewById(R.id.district_spinner);
+        thanaSpinner = (Spinner) findViewById(R.id.thana_spinner);
+
+        bloodGroupSpinner = (Spinner) findViewById(R.id.blood_group_spinner);
+        getBloodGroupsFromServer();
+        getDivisionsFromServer();
+
+
+        searchDonar = (Button) findViewById(R.id.search_donar_btn);
+        searchDonar.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                /*Intent intent = new Intent(SearchActivity.this, MapsActivity.class);
+                startActivity(intent);*/
+                getBloodDonarsFromServer();
+            }
+        });
+    }
+
+    private void getBloodGroupsFromServer(){
+        Log.d("SearchActivity", "-----from getBloodGroupsFromServer Method");
+        RequestQueue queue = Volley.newRequestQueue(SearchActivity.this);
+        String url="http://projectbubt.xyz/Api/bloodGroup/";
+
+        StringRequest postRequest = new StringRequest(Request.Method.GET, url,
+                new Response.Listener<String>()
+                {
+                    @Override
+                    public void onResponse(String response) {
+                        // response
+                        Log.d("SearchActivity", ""+response);
+                        try {
+                            JSONArray jsonArray = new JSONArray(response);
+                            ArrayList<Blood> bloodGroups = new ArrayList<>();
+                            for(int i=0; i<jsonArray.length(); i++){
+                                JSONObject json = jsonArray.getJSONObject(i);
+                                bloodGroups.add(new Blood(json.getString("b_group_id"), json.getString("group_name")));
+                                if(i == 0) bloodGroupId = json.getString("b_group_id");
+                            }
+                            setBloodSpinner(bloodGroups);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                },
+                new Response.ErrorListener()
+                {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        Log.d("SearchActivity", "----on error: "+error);
+                    }
+                }
+        );
+        postRequest.setRetryPolicy(new DefaultRetryPolicy( 50000, 5, DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
+        queue.add(postRequest);
+    }
+
+    private void getBloodDonarsFromServer(){
+        RequestQueue queue = Volley.newRequestQueue(SearchActivity.this);
+        String url="http://projectbubt.xyz/Api/searchDonors/";
+
+        StringRequest postRequest = new StringRequest(Request.Method.POST, url, new Response.Listener<String>() {
+
+            @Override
+            public void onResponse(String response) {
+                Log.d("SearchActivity", response);
+                try {
+                    donars = new ArrayList<>();
+                    JSONArray jsonArray = new JSONArray(response);
+                    for(int i=0; i<jsonArray.length(); i++){
+                        JSONObject json = jsonArray.getJSONObject(i);
+                        donars.add(new Donar(json.getString("id"), json.getString("name"), json.getString("contact"), json.getString("email"), json.getDouble("Latitude"), json.getDouble("Longitude")));
+                    }
+                    Intent intent = new Intent(SearchActivity.this, MapsActivity.class);
+                    startActivity(intent);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+
+            }
+        }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                VolleyLog.d(" Volley log", error);
+            }
+        }){
+            @Override
+            protected Map<String, String> getParams()
+            {
+                Map<String, String>  params = new HashMap<String, String>();
+                params.put("bloodgroup", bloodGroupId);
+                params.put("thana", thanaId);
+                params.put("latitude", "0");
+                params.put("longitude", "0");
+                return params;
+            }
+        };
+
+        postRequest.setRetryPolicy(new DefaultRetryPolicy( 50000, 3, DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
+        queue.add(postRequest);
+    }
+
+    private void setBloodSpinner(ArrayList<Blood> bloods){
+        ArrayAdapter<Blood> bloodGroupAdapter = new ArrayAdapter<Blood>(SearchActivity.this, android.R.layout.simple_spinner_dropdown_item, bloods);
+        bloodGroupSpinner.setAdapter(bloodGroupAdapter);
+        bloodGroupSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                Blood group = (Blood) adapterView.getSelectedItem();
+                bloodGroupId = group.getId();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+
+            }
+        });
+    }
+
+    public boolean isOnline() {
+        ConnectivityManager conManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (conManager != null) {
+            NetworkInfo netInfo = conManager.getActiveNetworkInfo();
+            if (netInfo != null && netInfo.isConnected()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void showInternetAlert() {
+        runOnUiThread(new Runnable() {
+            public void run() {
+                /*dataStore.showConfirmationDialog(
+                        SignupLoginActivity.this,
+                        Const.NO_INTERNET,
+                        "Continue",
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog,
+                                                int which) {
+                                dataStore.setPopupShown(false);
+                                dialog.cancel();
+                            }
+                        },
+                        "Network Settings",
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog,
+                                                int which) {
+                                dataStore.setPopupShown(false);
+                                Intent intent = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
+                                startActivityForResult(intent, Const.REQUEST_CODE_MOBILE_DATA);
+                            }
+                        }, "Wi-Fi Settings",
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog,
+                                                int which) {
+                                dataStore.setPopupShown(false);
+                                Intent intent = new Intent(Settings.ACTION_WIFI_SETTINGS);
+                                startActivityForResult(intent, Const.REQUEST_CODE_WIFI);
+                            }
+                        }, false);*/
+            }
+        });
+    }
+
+    private void showAlert() {
+        AlertDialog.Builder builder1 = new AlertDialog.Builder(SearchActivity.this);
+        builder1.setTitle("Internet Alert");
+        builder1.setMessage("No Internet Available!");
+        builder1.setCancelable(true);
+
+        builder1.setPositiveButton(
+                "Ok",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        dialog.cancel();
+                    }
+                });
+
+        builder1.setNegativeButton(
+                "",
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        dialog.cancel();
+                    }
+                });
+
+        AlertDialog alert11 = builder1.create();
+        alert11.show();
+    }
+    private void getDivisionsFromServer(){
+        RequestQueue queue = Volley.newRequestQueue(SearchActivity.this);
+        String url="http://projectbubt.xyz/Api/division/";
+
+        StringRequest postRequest = new StringRequest(Request.Method.GET, url,
+                new Response.Listener<String>()
+                {
+                    @Override
+                    public void onResponse(String response) {
+                        // response
+                        Log.d("LoginResponse", ""+response);
+                        try {
+                            JSONArray jsonArray = new JSONArray(response);
+                            ArrayList<Division> divisions = new ArrayList<>();
+                            for(int i=0; i<jsonArray.length(); i++){
+                                JSONObject json = jsonArray.getJSONObject(i);
+                                divisions.add(new Division(json.getString("div_id"), json.getString("div_name")));
+                                if(i == 0) divisionId = json.getString("div_id");
+                            }
+                            setDivisionSpinner(divisions);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                },
+                new Response.ErrorListener()
+                {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        // error
+//                                Log.d("Error.Response", response);
+                    }
+                }
+        );
+        postRequest.setRetryPolicy(new DefaultRetryPolicy( 50000, 5, DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
+        queue.add(postRequest);
+    }
+    private void getDistrictFromServer(String divisionId){
+        String url = "http://projectbubt.xyz/Api/district/"+divisionId;
+        RequestQueue queue = Volley.newRequestQueue(SearchActivity.this);
+
+        StringRequest postRequest = new StringRequest(Request.Method.GET, url,
+                new Response.Listener<String>()
+                {
+                    @Override
+                    public void onResponse(String response) {
+                        // response
+                        Log.d("LoginResponse", ""+response);
+                        try {
+                            JSONArray jsonArray = new JSONArray(response);
+                            ArrayList<District> districts = new ArrayList<>();
+                            for(int i=0; i<jsonArray.length(); i++){
+                                JSONObject json = jsonArray.getJSONObject(i);
+                                districts.add(new District(json.getString("dis_id"), json.getString("dis_name")));
+                                if(i == 0) districtId = json.getString("dis_id");
+                            }
+                            setDistrictSpinner(districts);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                },
+                new Response.ErrorListener()
+                {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        // error
+//                                Log.d("Error.Response", response);
+                    }
+                }
+        );
+        postRequest.setRetryPolicy(new DefaultRetryPolicy( 50000, 5, DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
+        queue.add(postRequest);
+    }
+    private void getThanaFromServer(String districtId){
+        String url = "http://projectbubt.xyz/Api/thana/"+districtId;
+        RequestQueue queue = Volley.newRequestQueue(SearchActivity.this);
+
+        StringRequest postRequest = new StringRequest(Request.Method.GET, url,
+                new Response.Listener<String>()
+                {
+                    @Override
+                    public void onResponse(String response) {
+                        // response
+                        Log.d("LoginResponse", ""+response);
+                        try {
+                            JSONArray jsonArray = new JSONArray(response);
+                            ArrayList<Thana> thanas = new ArrayList<>();
+                            for(int i=0; i<jsonArray.length(); i++){
+                                JSONObject json = jsonArray.getJSONObject(i);
+                                thanas.add(new Thana(json.getString("thana_id"), json.getString("thana_name")));
+                                if(i == 0) thanaId = json.getString("thana_id");
+                            }
+                            setThanaSpinner(thanas);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                },
+                new Response.ErrorListener()
+                {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+                        // error
+//                                Log.d("Error.Response", response);
+                    }
+                }
+        );
+        postRequest.setRetryPolicy(new DefaultRetryPolicy( 50000, 5, DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
+        queue.add(postRequest);
+    }
+    private void setDivisionSpinner(ArrayList<Division> divisions){
+
+        ArrayAdapter<Division> adapter = new ArrayAdapter<Division>(SearchActivity.this, android.R.layout.simple_spinner_dropdown_item, divisions);
+        divisionSpinner.setAdapter(adapter);
+        adapter.notifyDataSetChanged();
+        divisionSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                Division division = (Division) adapterView.getSelectedItem();
+                getDistrictFromServer(division.getId());
+                divisionId = division.getId();
+//                Toast.makeText(SearchActivity.this, "Division ID: "+division.getId()+",  Division Name : "+division.getName(), Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+
+            }
+        });
+    }
+
+    private void setDistrictSpinner(ArrayList<District> districts){
+
+        ArrayAdapter<District> districtAdapter = new ArrayAdapter<District>(SearchActivity.this, android.R.layout.simple_spinner_dropdown_item, districts);
+        districtSpinner.setAdapter(districtAdapter);
+        districtSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                District district = (District) adapterView.getSelectedItem();
+                districtId = district.getId();
+                getThanaFromServer(district.getId());
+//                Toast.makeText(SearchActivity.this, "District ID: "+district.getId()+",  District Name : "+district.getName(), Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+
+            }
+        });
+    }
+
+    private void setThanaSpinner(ArrayList<Thana> thanas){
+
+        ArrayAdapter<Thana> thanaAdapter = new ArrayAdapter<Thana>(SearchActivity.this, android.R.layout.simple_spinner_dropdown_item, thanas);
+        thanaSpinner.setAdapter(thanaAdapter);
+        thanaSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                Thana thana = (Thana) adapterView.getSelectedItem();
+                thanaId = thana.getId();
+//                Toast.makeText(SearchActivity.this, "Thana ID: "+thana.getId()+",  Thana Name : "+thana.getName(), Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+
+            }
+        });
+    }
